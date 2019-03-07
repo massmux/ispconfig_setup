@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------
-# Function: AskQuestions Debian 8
+# Function: AskQuestions Debian 9
 #	Ask for all needed user input
 #---------------------------------------------------------------------
 AskQuestions() {
@@ -12,14 +12,9 @@ AskQuestions() {
 		echo -e "[${green}DONE${NC}]\n"
 	fi
 
-	while [[ ! "$CFG_SQLSERVER" =~ $RE ]]
-	do
-		CFG_SQLSERVER=$(whiptail --title "SQL Server" --backtitle "$WT_BACKTITLE" --nocancel --radiolist "Please select SQL Server type" 10 50 2 "MySQL" "(default)" ON "MariaDB" "" OFF 3>&1 1>&2 2>&3)
-	done
-
 	while [[ ! "$CFG_MYSQL_ROOT_PWD" =~ $RE ]]
 	do
-		CFG_MYSQL_ROOT_PWD=$(whiptail --title "$CFG_SQLSERVER" --backtitle "$WT_BACKTITLE" --passwordbox "Please specify a root password" --nocancel 10 50 3>&1 1>&2 2>&3)
+		CFG_MYSQL_ROOT_PWD=$(whiptail --title "MySQL" --backtitle "$WT_BACKTITLE" --passwordbox "Please specify a root password" --nocancel 10 50 3>&1 1>&2 2>&3)
 	done
 
 	while [[ ! "$CFG_WEBSERVER" =~ $RE ]]
@@ -27,6 +22,11 @@ AskQuestions() {
 		CFG_WEBSERVER=$(whiptail --title "Web server" --backtitle "$WT_BACKTITLE" --nocancel --radiolist "Please select Web server type" 10 50 2 "Apache" "(default)" ON "nginx" "" OFF 3>&1 1>&2 2>&3)
 	done
 	CFG_WEBSERVER=${CFG_WEBSERVER,,}
+		
+	while [[ ! "$CFG_PHP56" =~ $RE ]]
+	do
+		CFG_PHP56=$(whiptail --title "Install PHP 5.6" --backtitle "$WT_BACKTITLE" --nocancel --radiolist "By default ISPConfig comes with PHP 7, do you want to install also PHP 5.6 version?" 10 50 2 "no" "(default)" ON "yes" "" OFF 3>&1 1>&2 2>&3)
+	done
 
 	if echo "$ID" | grep -iq 'raspbian'; then
 		CFG_HHVM="no"
@@ -37,21 +37,10 @@ AskQuestions() {
 		done
 	fi
 
-	while [[ ! "$CFG_XCACHE" =~ $RE ]]
-	do
-		CFG_XCACHE=$(whiptail --title "Install XCache" --backtitle "$WT_BACKTITLE" --nocancel --radiolist "Do you want to install XCache (PHP opcode cacher)? ATTENTION: If XCache is installed, Ioncube Loaders will not work !!" 20 50 2 "yes" "(default)" ON "no" "" OFF 3>&1 1>&2 2>&3)
-	done
-
 	while [[ ! "$CFG_PHPMYADMIN" =~ $RE ]]
 	do
 		CFG_PHPMYADMIN=$(whiptail --title "Install phpMyAdmin" --backtitle "$WT_BACKTITLE" --nocancel --radiolist "Do you want to install phpMyAdmin?" 10 50 2 "yes" "(default)" ON "no" "" OFF 3>&1 1>&2 2>&3)
 	done
-
-	while [[ ! "$CFG_MTA" =~ $RE ]]
-	do
-		CFG_MTA=$(whiptail --title "Mail Server" --backtitle "$WT_BACKTITLE" --nocancel --radiolist "Please select Mail server type" 10 50 2 "Dovecot" "(default)" ON "Courier" "" OFF 3>&1 1>&2 2>&3)
-	done
-	CFG_MTA=${CFG_MTA,,}
 
 	while [[ ! "$CFG_AVUPDATE" =~ $RE ]]
 	do
@@ -75,7 +64,7 @@ AskQuestions() {
 
 	while [[ ! "$CFG_WEBMAIL" =~ $RE ]]
 	do
-		CFG_WEBMAIL=$(whiptail --title "Webmail client" --backtitle "$WT_BACKTITLE" --nocancel --radiolist "Please select your webmail client" 10 50 2 "Roundcube" "(default)" ON "SquirrelMail" "" OFF "no" "(Skip)" OFF 3>&1 1>&2 2>&3)
+		CFG_WEBMAIL=$(whiptail --title "Webmail client" --backtitle "$WT_BACKTITLE" --nocancel --radiolist "Please select your webmail client" 10 50 2 "Roundcube" "(default)" ON "SquirrelMail" "" OFF 3>&1 1>&2 2>&3)
 	done
 	CFG_WEBMAIL=${CFG_WEBMAIL,,}
 
@@ -103,10 +92,4 @@ AskQuestions() {
 	do
 		SSL_ORGUNIT=$(whiptail --title "SSL Organization Unit" --backtitle "$WT_BACKTITLE" --inputbox "SSL Configuration - Organizational Unit Name (eg, section) (ex. IT Department)" --nocancel 10 50 3>&1 1>&2 2>&3)
 	done
-
-
-
-
-
-
 }

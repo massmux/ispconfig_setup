@@ -1,0 +1,164 @@
+#!/bin/bash
+
+
+red='\e[0;31m'
+green='\e[0;32m'
+yellow='\e[0;33m'
+bold='\e[1m'
+underlined='\e[4m'
+NC='\e[0m' # No Color
+COLUMNS=$(tput cols)
+
+echo -n "Getting system infos... "
+CFG_HOSTNAME_FQDN=$(hostname -f); # hostname -A
+IP_ADDRESS=( $(hostname -I) );
+APWD=$(pwd);
+echo -e "[${green}DONE${NC}]"
+echo
+
+echo "Server details"
+echo -n "FQDN Hostname: "
+echo $CFG_HOSTNAME_FQDN;
+echo -n "IPv4 address: "
+echo $IP_ADDRESS;
+echo
+echo "This script configure the ispconfig server"
+echo
+
+MY_PROMPT='Shall we go ahead? (y/n): '
+echo -n "$MY_PROMPT"
+read confirm
+
+if [[ ${confirm} != "y"* ]];then
+	echo -e "${red}Error: Routine not started by the user, cannot go on.${NC}" >&2
+	exit 1
+fi
+
+
+echo -n "Some dependencies ... "
+apt-get update
+apt-get install -y php-soap wget curl vim vim-nox git
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Checking if ISP is installed ... "
+if [ ! -f /usr/local/ispconfig/server/server.php ]; then
+	        echo -e "${red}Error: ISPConfig not installed, cannot go on.${NC}" >&2
+		        exit 1
+		fi
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Creating ISPConfig remote user ... "
+REMOTE_PWD=$(< /dev/urandom tr -dc A-Z-a-z-0-9 | head -c12)
+
+while [[ ! "$CFG_MYSQL_ROOT_PWD" ]]
+        do
+	      CFG_MYSQL_ROOT_PWD=$(whiptail --title "MySQL root password" --backtitle "Mysql root password" --inputbox "Please specify a MySQL root password" 10 50 3>&1 1>&2 2>&3)
+       done
+
+       mysql -uroot -p$CFG_MYSQL_ROOT_PWD dbispconfig -e "INSERT INTO remote_user (remote_userid, sys_userid, sys_groupid, sys_perm_user, sys_perm_group, sys_perm_other, remote_username, remote_password, remote_functions) VALUES (2, 1, 1, 'riud', 'riud', '', 'remoteuser', MD5('$REMOTE_PWD'), 'sites_web_domain_get,sites_web_domain_add,sites_web_domain_update,sites_web_domain_delete,sites_web_domain_set_status');"
+
+echo "Remote ispconfig user configured | remoteuser pass: $REMOTE_PWD"
+echo -e "[${green}DONE${NC}]\n"
+
+
+echo -n "Creating ISPConfig virtualhost and letsencrypt cert ... "
+php $APWD/sites_web_domain_add.php $CFG_HOSTNAME_FQDN $REMOTE_PWD
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Waiting for issuing to be completed 240 secs... do not abort ... "
+sleep 240
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Checking if cert has been issued... "
+if [ -f /etc/letsencrypt/archive/$CFG_HOSTNAME_FQDN/fullchain.pem ]; then
+	echo -e "${red}Error: Cert not correctly issued, cannot go on.${NC}" >&2
+	exit 1
+fi
+echo -e "[${green}DONE${NC}]\n"
+
+
+echo -n "Setting up cert for ISPconfig and webmail ... "
+cd /usr/local/ispconfig/interface/ssl
+rm -f ispserver.*
+ln -s /etc/letsencrypt/live/$CFG_HOSTNAME_FQDN/fullchain.pem ./ispserver.crt
+ln -s /etc/letsencrypt/live/$CFG_HOSTNAME_FQDN/fullchain.pem ./ispserver.bundle
+ln -s /etc/letsencrypt/live/$CFG_HOSTNAME_FQDN/privkey.pem ./ispserver.key
+/etc/init.d/apache2 restart
+echo -e "[${green}DONE${NC}]\n"
+
+
+echo -n "Setting up postfix params ... "
+postconf message_size_limit=26214400
+postconf smtpd_tls_CAfile=/etc/postfix/smtpd.bundle.cert
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Setting up postfix certs ... "
+cd /etc/postfix
+rm -f smtpd.cert smtpd.key 
+ln -s /etc/letsencrypt/live/$CFG_HOSTNAME_FQDN/fullchain.pem ./smtpd.cert
+ln -s /etc/letsencrypt/live/$CFG_HOSTNAME_FQDN/fullchain.pem ./smtpd.bundle.cert
+ln -s /etc/letsencrypt/live/$CFG_HOSTNAME_FQDN/privkey.pem ./smtpd.key
+/etc/init.d/postfix restart
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Setting up pureftp certs ... "
+cd /etc/letsencrypt/live/$CFG_HOSTNAME_FQDN
+cat cert.pem > pure-ftpd.pem
+cat privkey.pem >> pure-ftpd.pem
+cd /etc/ssl/private
+rm pure-ftpd.pem
+ln -s /etc/letsencrypt/live/$CFG_HOSTNAME_FQDN/pure-ftpd.pem ./pure-ftpd.pem
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Setting up pureftpd config ... "
+echo 1 > /etc/pure-ftpd/conf/TLS
+echo "30000 50000" > /etc/pure-ftpd/conf/PassivePortRange
+echo "50" > /etc/pure-ftpd/conf/MaxClientsNumber
+/etc/init.d/pure-ftpd-mysql restart
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Setting up php limits ... "
+sed -i "s/upload_max_filesize = .*/upload_max_filesize = 150M/" /etc/php/7.0/apache2/php.ini
+sed -i "s/upload_max_filesize = .*/upload_max_filesize = 150M/" /etc/php/7.0/cgi/php.ini
+sed -i "s/upload_max_filesize = .*/upload_max_filesize = 150M/" /etc/php/7.0/cli/php.ini
+sed -i "s/upload_max_filesize = .*/upload_max_filesize = 150M/" /etc/php/7.0/fpm/php.ini
+sed -i "s/post_max_size = .*/post_max_size = 150M/" /etc/php/7.0/apache2/php.ini
+sed -i "s/post_max_size = .*/post_max_size = 150M/" /etc/php/7.0/cgi/php.ini
+sed -i "s/post_max_size = .*/post_max_size = 150M/" /etc/php/7.0/cli/php.ini
+sed -i "s/post_max_size = .*/post_max_size = 150M/" /etc/php/7.0/fpm/php.ini
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Activating apache modules ... "
+/usr/sbin/a2enmod expires
+/usr/sbin/a2enmod headers
+/usr/sbin/a2enmod proxy
+/usr/sbin/a2enmod proxy_http
+/etc/init.d/apache2 restart
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Setting up swapfile ... "
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+cp /etc/fstab /etc/fstab.bak
+echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+echo -e "[${green}DONE${NC}]\n"
+
+echo -n "Setting up updatecert ... "
+cp -R updatecert /etc
+cd /etc/updatecert
+echo "SERVER=\"$CFG_HOSTNAME_FQDN\";" >> /etc/updatecert/updatecert.ini
+entry="00 03 * * * /bin/sh /etc/updatecert/updatecert.sh"
+escapedEntry=$(printf '%s\n' "$entry" | sed 's:[][\/.^$*]:\\&:g') 
+echo -n "Setting up crontab for updatecert ... "
+if [[ $(crontab -l | egrep -v '^(#|$)' | grep -q "$escapedEntry"; echo $?) == 1 ]]
+then
+printf "all clear; pattern was not already present;\n"
+        (crontab -l ; printf "$entry\n\n") | crontab -
+else
+	    printf "pattern already present; no action taken\n"
+fi
+
+
+echo -e "[${green}FINISHED. Do not forget to 1) change ISPconfig pass and 2) set firewall if needed. ${NC}]\n"

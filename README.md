@@ -23,7 +23,7 @@ if all the above went fine, remember to:
 ### Who had contributed to this work? ###
 
 * The scripts and instructions have been produced by Matteo Temporini for install script
-* The scripts for additional configurations configure by Massimo Musumeci massimo <at> denali.swiss
+* The scripts for additional configurations "configure" script by Massimo Musumeci massimo (at) denali.swiss
 * Special thanks to Travis CI for adding support to Raspberry and a big number of Bugs
 * Special thanks to Torsten Widmann for contribution to the code
 * Special thanks to Michiel Kamphuis for contribution to Multiserver Setup integration
